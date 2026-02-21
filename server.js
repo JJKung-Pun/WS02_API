@@ -1,22 +1,72 @@
-const http  = require('http')
+const http = require('http')
+const url = require('url')
 
 const PORT = process.env.PORT || 9818
 
-// ---------------------------------------------
-function onClientRequest(request, response)
-{
-    response.writeHead(200)
+function collectBodyData(req) {
+    let body = ""
 
-    console.log(request.method)
+    return new Promise((resolve) => {
+        req.on("data", (chunk) => {
+            body += chunk.toString()
+        })
 
-    console.log(request.url)
-
-    console.log('===============================')
-
-    response.end()
+        req.on("end", () => {
+            try {
+                resolve(JSON.parse(body))
+            } catch {
+                resolve({})
+            }
+        })
+    })
 }
 
-let server = http.createServer(onClientRequest)
-    server.listen(PORT)
+async function onClientRequest(req, res) {
 
-    console.log('Server started listening in ' + PORT )
+    const parsedUrl = url.parse(req.url, true)
+    const path = parsedUrl.pathname
+    const query = parsedUrl.query
+
+    res.setHeader('Content-Type', 'application/json')
+
+    // ================= GET =================
+    if (req.method === 'GET') {
+
+        if (path === '/' || path === '') {
+
+            if (query.message !== undefined) {
+                return res.end(
+                    JSON.stringify({ msg: "Hello, How are you?" })
+                )
+            }
+
+            return res.end(
+                JSON.stringify({ msg: "Hello" })
+            )
+        }
+
+        res.statusCode = 404
+        return res.end(JSON.stringify({ error: "Not Found" }))
+    }
+
+    // ================= POST =================
+    if (req.method === 'POST' && path === '/api/sayhi') {
+
+        const body = await collectBodyData(req)
+        const name = body.name || ""
+
+        return res.end(
+            JSON.stringify({ msg: `Hello ${name}, How are you?` })
+        )
+    }
+
+    // ================= อื่น ๆ =================
+    res.statusCode = 405
+    res.end(JSON.stringify({ error: "Method Not Allowed" }))
+}
+
+const server = http.createServer(onClientRequest)
+
+server.listen(PORT, () => {
+    console.log('Server started listening on port ' + PORT)
+})
